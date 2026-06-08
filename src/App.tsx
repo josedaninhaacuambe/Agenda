@@ -9,42 +9,9 @@ import QuadrantBoard from './components/QuadrantBoard';
 import AddTaskModal from './components/AddTaskModal';
 import LoginPage from './components/LoginPage';
 import { Task, Priority, Timeframe } from './types';
-import { loadTasks, saveTasks, getSeedVersion, setSeedVersion } from './utils/storage';
+import { loadTasks, saveTasks } from './utils/storage';
 import { useNotifications } from './hooks/useNotifications';
 
-const SEED_VERSION = 'v4_auth_initial';
-
-/* Seed tasks spread across all 4 timeframes so the user sees the concept immediately */
-const SEED_TASKS: Omit<Task, 'id' | 'createdAt' | 'completedAt'>[] = [
-  // ── Diário ────────────────────────────────────────────────────
-  { title: 'Responder e-mails prioritários',           priority: 'Q1', category: 'trabalho', timeframe: 'diario',  completed: false },
-  { title: 'Rever agenda do dia',                      priority: 'Q2', category: 'trabalho', timeframe: 'diario',  completed: false },
-  { title: 'Exercício físico — 30 minutos',            priority: 'Q2', category: 'pessoal',  timeframe: 'diario',  completed: false },
-  // ── Semanal ───────────────────────────────────────────────────
-  { title: 'Socialização da aplicação de Roud Report', priority: 'Q1', category: 'trabalho', timeframe: 'semanal', completed: false, description: 'Urgente — implementar junto das equipas' },
-  { title: 'Elaboração das Matrizes de conhecimento',  priority: 'Q1', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Validação dos resultados do mapeamento',   priority: 'Q1', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Yanik — última parcela',                   priority: 'Q1', category: 'pessoal',  timeframe: 'semanal', completed: false },
-  { title: 'Fechar documentos para Beconnected',       priority: 'Q1', category: 'pessoal',  timeframe: 'semanal', completed: false },
-  { title: 'Encontro com os formadores DIC',           priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Apresentar avanços — avaliação desempenho',priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Encontro DTI DID — aplicação dos PT\'s',   priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Solicitação de servidor — Roud Report',    priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Lançamento Webinar — Senhora Directora',   priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Iniciar treinamento dos vendedores',       priority: 'Q2', category: 'pessoal',  timeframe: 'semanal', completed: false },
-  { title: 'Terminar aplicação do Beconnected',        priority: 'Q1', category: 'pessoal',  timeframe: 'semanal', completed: false },
-  { title: 'Pesquisar tablets — POS Beconnected',      priority: 'Q2', category: 'pessoal',  timeframe: 'semanal', completed: false },
-  { title: 'Escolher motorizada',                      priority: 'Q3', category: 'pessoal',  timeframe: 'semanal', completed: false },
-  // ── Mensal ────────────────────────────────────────────────────
-  { title: 'Revisão e actualização do plano de negócio Beconnected', priority: 'Q2', category: 'pessoal',  timeframe: 'mensal', completed: false },
-  { title: 'Implementar gatilhos psicológicos no repositório',        priority: 'Q2', category: 'trabalho', timeframe: 'mensal', completed: false, description: 'Melhorar engajamento dos utilizadores' },
-  { title: 'Relatório mensal de progresso digital',    priority: 'Q2', category: 'trabalho', timeframe: 'mensal', completed: false },
-  { title: 'Fechar processo documentação Beconnected', priority: 'Q1', category: 'pessoal',  timeframe: 'mensal', completed: false },
-  // ── Anual ─────────────────────────────────────────────────────
-  { title: 'Lançar o Beconnected no mercado',          priority: 'Q1', category: 'pessoal',  timeframe: 'anual',  completed: false, description: 'Objectivo estratégico do ano' },
-  { title: 'Consolidar repositório do conhecimento',   priority: 'Q2', category: 'trabalho', timeframe: 'anual',  completed: false },
-  { title: 'Crescimento profissional — formações',     priority: 'Q2', category: 'pessoal',  timeframe: 'anual',  completed: false },
-];
 
 /* ── Setup instructions (no .env configured) ────────────────── */
 function SetupScreen() {
@@ -83,27 +50,16 @@ export default function App() {
   const { requestPermission, registerSW, checkAndRemind, checkDeadlines } = useNotifications();
   const userId = user?.sub ?? 'guest';
 
-  // Load / seed tasks when authenticated
+  // Load tasks when authenticated — each user has isolated storage
   useEffect(() => {
     if (!isAuthenticated || !user) return;
-
-    const saved    = loadTasks(userId);
-    const seedVer  = getSeedVersion(userId);
-
-    if (saved.length === 0 && seedVer !== SEED_VERSION) {
-      const seeded = SEED_TASKS.map((t) => ({
-        ...t,
-        id: uuidv4(),
-        createdAt: new Date().toISOString(),
-      }));
-      setTasks(seeded);
-      setSeedVersion(userId, SEED_VERSION);
-    } else {
-      // Migrate old tasks that lack a timeframe field (pre-auth data)
-      const migrated = saved.map((t) => ({ ...t, timeframe: (t as Task & { timeframe?: Timeframe }).timeframe ?? 'semanal' as Timeframe }));
-      setTasks(migrated);
-    }
-
+    const saved = loadTasks(userId);
+    // Migrate any old tasks that lack a timeframe field
+    const migrated = saved.map((t) => ({
+      ...t,
+      timeframe: (t as Task & { timeframe?: Timeframe }).timeframe ?? 'semanal' as Timeframe,
+    }));
+    setTasks(migrated);
     registerSW();
   }, [isAuthenticated, user, userId, registerSW]);
 
