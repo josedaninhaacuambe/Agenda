@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useAuth0 } from '@auth0/auth0-react';
 import { Target } from 'lucide-react';
+import { useGoogleAuth } from './hooks/useGoogleAuth';
 import Header from './components/Header';
 import StatsBar from './components/StatsBar';
 import QuadrantBoard from './components/QuadrantBoard';
@@ -46,21 +46,6 @@ const SEED_TASKS: Omit<Task, 'id' | 'createdAt' | 'completedAt'>[] = [
   { title: 'Crescimento profissional — formações',     priority: 'Q2', category: 'pessoal',  timeframe: 'anual',  completed: false },
 ];
 
-/* ── Loading screen ─────────────────────────────────────────── */
-function LoadingScreen() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center">
-        <motion.div animate={{ scale: [1, 1.08, 1] }} transition={{ repeat: Infinity, duration: 1.6 }}
-          className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg mx-auto mb-4">
-          <Target className="w-8 h-8 text-white" />
-        </motion.div>
-        <p className="text-slate-500 text-sm">A carregar…</p>
-      </motion.div>
-    </div>
-  );
-}
-
 /* ── Setup instructions (no .env configured) ────────────────── */
 function SetupScreen() {
   return (
@@ -69,15 +54,13 @@ function SetupScreen() {
         <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center mb-4">
           <span className="text-2xl">⚙️</span>
         </div>
-        <h2 className="text-slate-800 font-bold text-lg mb-2">Configurar Auth0</h2>
+        <h2 className="text-slate-800 font-bold text-lg mb-2">Configurar Google OAuth</h2>
         <p className="text-slate-600 text-sm mb-4 leading-relaxed">
           Crie um ficheiro <code className="bg-slate-100 px-1 rounded text-xs">.env.local</code> na raiz do projecto com:
         </p>
-        <pre className="bg-slate-900 text-green-400 text-xs rounded-xl p-4 mb-4 overflow-x-auto">{`VITE_AUTH0_DOMAIN=seu-tenant.auth0.com
-VITE_AUTH0_CLIENT_ID=o-seu-client-id`}</pre>
+        <pre className="bg-slate-900 text-green-400 text-xs rounded-xl p-4 mb-4 overflow-x-auto">{`VITE_GOOGLE_CLIENT_ID=seu-client-id.apps.googleusercontent.com`}</pre>
         <p className="text-slate-500 text-xs leading-relaxed">
-          Crie uma conta em <strong>auth0.com</strong> → New Application → Single Page Application → ative Google Social Connection.
-          Adicione <code className="bg-slate-100 px-1 rounded">http://localhost:5173</code> e o URL do Vercel nas Allowed Callback URLs.
+          Obtenha o Client ID no <strong>Google Cloud Console</strong> → APIs &amp; Services → Credentials → OAuth 2.0 Client IDs.
         </p>
       </div>
     </div>
@@ -86,7 +69,7 @@ VITE_AUTH0_CLIENT_ID=o-seu-client-id`}</pre>
 
 /* ── Main App ───────────────────────────────────────────────── */
 export default function App() {
-  const { isAuthenticated, isLoading, user } = useAuth0();
+  const { isAuthenticated, user } = useGoogleAuth();
 
   const [tasks,      setTasks]      = useState<Task[]>([]);
   const [timeframe,  setTimeframe]  = useState<Timeframe>('semanal');
@@ -175,9 +158,8 @@ export default function App() {
   };
 
   // ── Guards ──────────────────────────────────────────────────
-  const envMissing = !import.meta.env.VITE_AUTH0_DOMAIN || !import.meta.env.VITE_AUTH0_CLIENT_ID;
+  const envMissing = !import.meta.env.VITE_GOOGLE_CLIENT_ID;
   if (envMissing)       return <SetupScreen />;
-  if (isLoading)        return <LoadingScreen />;
   if (!isAuthenticated) return <LoginPage />;
 
   // ── Filtered tasks for the current timeframe ────────────────

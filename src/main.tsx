@@ -1,21 +1,15 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import { Auth0Provider } from '@auth0/auth0-react';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import App from './App.tsx';
 import './index.css';
 
-const domain   = import.meta.env.VITE_AUTH0_DOMAIN   as string;
-const clientId = import.meta.env.VITE_AUTH0_CLIENT_ID as string;
+const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <Auth0Provider
-      domain={domain}
-      clientId={clientId}
-      authorizationParams={{ redirect_uri: window.location.origin }}
-      cacheLocation="localstorage"
-    >
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <GoogleOAuthProvider clientId={clientId ?? ''}>
       <App />
-    </Auth0Provider>
-  </React.StrictMode>
+    </GoogleOAuthProvider>
+  </StrictMode>
 );
