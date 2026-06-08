@@ -80,7 +80,7 @@ export default function App() {
     () => 'Notification' in window && Notification.permission === 'granted'
   );
 
-  const { requestPermission, registerSW, checkAndRemind } = useNotifications();
+  const { requestPermission, registerSW, checkAndRemind, checkDeadlines } = useNotifications();
   const userId = user?.sub ?? 'guest';
 
   // Load / seed tasks when authenticated
@@ -112,13 +112,17 @@ export default function App() {
     if (isAuthenticated && tasks.length > 0) saveTasks(userId, tasks);
   }, [tasks, userId, isAuthenticated]);
 
-  // 15-min reminder loop
+  // 15-min periodic reminder + deadline alerts every minute
   useEffect(() => {
     if (!isAuthenticated) return;
     checkAndRemind(tasks);
-    const iv = setInterval(() => checkAndRemind(tasks), 60_000);
+    checkDeadlines(tasks, userId);
+    const iv = setInterval(() => {
+      checkAndRemind(tasks);
+      checkDeadlines(tasks, userId);
+    }, 60_000);
     return () => clearInterval(iv);
-  }, [tasks, checkAndRemind, isAuthenticated]);
+  }, [tasks, checkAndRemind, checkDeadlines, isAuthenticated, userId]);
 
   const handleRequestNotif = useCallback(async () => {
     const ok = await requestPermission();

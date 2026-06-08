@@ -38,3 +38,22 @@ export const getLastNotificationTime = (): number =>
 
 export const setLastNotificationTime = (): void =>
   localStorage.setItem(NOTIF_KEY, Date.now().toString());
+
+const alertsKey = (uid: string) => `agenda_alerts_${uid}`;
+
+export const getSentAlerts = (uid: string): Set<string> => {
+  try {
+    const raw = localStorage.getItem(alertsKey(uid));
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
+export const addSentAlert = (uid: string, key: string): void => {
+  const set = getSentAlerts(uid);
+  set.add(key);
+  // Trim to last 500 entries to avoid unbounded growth
+  const arr = Array.from(set).slice(-500);
+  localStorage.setItem(alertsKey(uid), JSON.stringify(arr));
+};
