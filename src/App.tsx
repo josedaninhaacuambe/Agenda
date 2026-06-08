@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Target } from 'lucide-react';
-import { useGoogleAuth } from './hooks/useGoogleAuth';
+import { useGoogleAuth } from './contexts/GoogleAuthContext';
 import Header from './components/Header';
 import StatsBar from './components/StatsBar';
 import QuadrantBoard from './components/QuadrantBoard';

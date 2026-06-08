@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { Target, Bell, Mic, Shield } from 'lucide-react';
-import { useGoogleAuth, GoogleUser } from '../hooks/useGoogleAuth';
+import { useGoogleAuth, GoogleUser } from '../contexts/GoogleAuthContext';
 
 interface GoogleJwt {
   sub: string;

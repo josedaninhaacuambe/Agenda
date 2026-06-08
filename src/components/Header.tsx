@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Task, Timeframe } from '../types';
 import { TIMEFRAME_CONFIG } from '../constants/timeframes';
-import { useGoogleAuth } from '../hooks/useGoogleAuth';
+import { useGoogleAuth } from '../contexts/GoogleAuthContext';
 
 interface HeaderProps {
   tasks: Task[];
