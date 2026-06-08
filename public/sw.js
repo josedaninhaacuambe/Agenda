@@ -1,24 +1,26 @@
-const CACHE_NAME = 'agenda-pro-v1';
-const ASSETS = ['/', '/index.html'];
+const CACHE_NAME = 'agenda-pro-v3';
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
-  );
-});
+self.addEventListener('install', () => self.skipWaiting());
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
+// Network-first: always fetch fresh, fallback to cache
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then((cached) => cached || fetch(e.request))
+    fetch(e.request)
+      .then((res) => {
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then((c) => c.put(e.request, clone));
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
 
@@ -33,15 +35,13 @@ self.addEventListener('notificationclick', (e) => {
 });
 
 self.addEventListener('message', (e) => {
-  if (e.data?.type === 'SHOW_NOTIFICATION') {
-    const { title, body } = e.data;
-    self.registration.showNotification(title, {
-      body,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      tag: 'agenda-reminder',
-      requireInteraction: false,
-      vibrate: [200, 100, 200],
-    });
-  }
+  if (e.data?.type !== 'SHOW_NOTIFICATION') return;
+  const { title, body } = e.data;
+  self.registration.showNotification(title, {
+    body,
+    icon: '/icon.svg',
+    tag:  title,
+    requireInteraction: false,
+    vibrate: [200, 100, 200],
+  });
 });
