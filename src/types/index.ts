@@ -1,5 +1,6 @@
-export type Priority = 'Q1' | 'Q2' | 'Q3' | 'Q4';
-export type Category = 'trabalho' | 'pessoal';
+export type Priority  = 'Q1' | 'Q2' | 'Q3' | 'Q4';
+export type Category  = 'trabalho' | 'pessoal';
+export type Timeframe = 'diario' | 'semanal' | 'mensal' | 'anual';
 
 export interface Task {
   id: string;
@@ -7,6 +8,7 @@ export interface Task {
   description?: string;
   priority: Priority;
   category: Category;
+  timeframe: Timeframe;
   completed: boolean;
   createdAt: string;
   dueDate?: string;

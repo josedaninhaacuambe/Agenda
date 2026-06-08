@@ -1,0 +1,48 @@
+export const TIMEFRAME_CONFIG = [
+  {
+    id: 'diario'  as const,
+    label: 'Diário',
+    period: 'hoje',
+    emoji: '📅',
+    activeBg: 'bg-sky-50',
+    activeBorder: 'border-sky-300',
+    activeText: 'text-sky-700',
+    dotColor: 'bg-sky-500',
+    ringColor: 'ring-sky-200',
+  },
+  {
+    id: 'semanal' as const,
+    label: 'Semanal',
+    period: 'esta semana',
+    emoji: '📆',
+    activeBg: 'bg-indigo-50',
+    activeBorder: 'border-indigo-300',
+    activeText: 'text-indigo-700',
+    dotColor: 'bg-indigo-500',
+    ringColor: 'ring-indigo-200',
+  },
+  {
+    id: 'mensal'  as const,
+    label: 'Mensal',
+    period: 'este mês',
+    emoji: '🗓️',
+    activeBg: 'bg-purple-50',
+    activeBorder: 'border-purple-300',
+    activeText: 'text-purple-700',
+    dotColor: 'bg-purple-500',
+    ringColor: 'ring-purple-200',
+  },
+  {
+    id: 'anual'   as const,
+    label: 'Anual',
+    period: 'este ano',
+    emoji: '📊',
+    activeBg: 'bg-rose-50',
+    activeBorder: 'border-rose-300',
+    activeText: 'text-rose-700',
+    dotColor: 'bg-rose-500',
+    ringColor: 'ring-rose-200',
+  },
+];
+
+export type TimeframeId = typeof TIMEFRAME_CONFIG[number]['id'];
