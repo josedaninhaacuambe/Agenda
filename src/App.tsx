@@ -1,78 +1,105 @@
-import { useState, useEffect, useCallback } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Cloud } from 'lucide-react';
+import { parseISO, differenceInMinutes } from 'date-fns';
+import { v4 as uuidv4 } from 'uuid';
 import { useGoogleAuth } from './contexts/GoogleAuthContext';
 import Header from './components/Header';
 import StatsBar from './components/StatsBar';
 import QuadrantBoard from './components/QuadrantBoard';
 import AddTaskModal from './components/AddTaskModal';
 import LoginPage from './components/LoginPage';
+import NotificationOverlay, { NotifItem } from './components/NotificationOverlay';
 import { Task, Priority, Timeframe } from './types';
-import { loadTasks, saveTasks } from './utils/storage';
+import { useTasks } from './hooks/useTasks';
 import { useNotifications } from './hooks/useNotifications';
+import { useAudioEngine } from './hooks/useAudioEngine';
+import { getSentAlerts, addSentAlert, getLastNotificationTime, setLastNotificationTime } from './utils/storage';
+import { isFirebaseConfigured } from './services/firebase';
 
-// ── Seed para josedaninhaacuambe@gmail.com ────────────────────────
-const JOSE_SEED_VERSION = 'v1_junho_2026';
+// ── Seed for josedaninhaacuambe@gmail.com ─────────────────────────────
+const JOSE_SEED_VERSION = 'v2_firebase_junho_2026';
 const joseSeedKey = (uid: string) => `agenda_v2_jose_seed_${uid}`;
 
-type SeedTask = Omit<Task, 'id' | 'createdAt' | 'completedAt'>;
+type SeedData = Omit<Task, 'id' | 'createdAt' | 'completedAt'>;
 
-const JOSE_TASKS: SeedTask[] = [
-  // Trabalho — Q1 Urgente
-  { title: 'Socialização da aplicação de Roud Report',                                         priority: 'Q1', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Elaboração das Matrizes de conhecimento',                                           priority: 'Q1', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Validação dos resultados preliminares do mapeamento',                               priority: 'Q1', category: 'trabalho', timeframe: 'semanal', completed: false, description: 'Encontro com os participantes do mapeamento' },
-  // Trabalho — Q2 Importante
-  { title: 'Encontro com os formadores DIC',                                                    priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Socialização da app de leitura dos parâmetros das máquinas',                        priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Apresentar avanços da avaliação de desempenho',                                     priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Encontro DTI DID — aplicação dos PT\'s',                                            priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Solicitação de servidor para Roud Report',                                          priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
-  // Trabalho — Q3 Médio
-  { title: 'Encontro com os CIEUM',                                                             priority: 'Q3', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Encontro DTI — ponto focal para iniciativas digitais',                              priority: 'Q3', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Memorando DGRH — ponto de situação da consultoria',                                 priority: 'Q3', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Lançamento do Webinar — Senhora Directora',                                         priority: 'Q3', category: 'trabalho', timeframe: 'semanal', completed: false },
-  { title: 'Gatilhos psicológicos para engajamento no repositório',                             priority: 'Q3', category: 'trabalho', timeframe: 'semanal', completed: false, description: 'Estudar e implementar para melhorar o engajamento dos utilizadores' },
-  // Pessoal — Q1 Urgente
-  { title: 'Yanik — última parcela',                                                            priority: 'Q1', category: 'pessoal',  timeframe: 'semanal', completed: false },
-  { title: 'Fechar documentos para Beconnected',                                                priority: 'Q1', category: 'pessoal',  timeframe: 'semanal', completed: false },
-  { title: 'Terminar aplicação do Beconnected',                                                 priority: 'Q1', category: 'pessoal',  timeframe: 'semanal', completed: false },
-  // Pessoal — Q2 Importante
-  { title: 'Eduardo — vender a máquina',                                                        priority: 'Q2', category: 'pessoal',  timeframe: 'semanal', completed: false },
-  { title: 'Aprovar os candidatos',                                                             priority: 'Q2', category: 'pessoal',  timeframe: 'semanal', completed: false },
-  { title: 'Iniciar treinamento dos vendedores',                                                priority: 'Q2', category: 'pessoal',  timeframe: 'semanal', completed: false },
-  { title: 'Pesquisar preços de tablets — POS Beconnected',                                     priority: 'Q2', category: 'pessoal',  timeframe: 'semanal', completed: false },
-  // Pessoal — Q4 Pode esperar
-  { title: 'Escolher motorizada',                                                               priority: 'Q4', category: 'pessoal',  timeframe: 'semanal', completed: false },
+const JOSE_TASKS: SeedData[] = [
+  { title: 'Socialização da aplicação de Roud Report',                                  priority: 'Q1', category: 'trabalho', timeframe: 'semanal', completed: false },
+  { title: 'Elaboração das Matrizes de conhecimento',                                    priority: 'Q1', category: 'trabalho', timeframe: 'semanal', completed: false },
+  { title: 'Validação dos resultados preliminares do mapeamento',                        priority: 'Q1', category: 'trabalho', timeframe: 'semanal', completed: false, description: 'Encontro com os participantes do mapeamento' },
+  { title: 'Yanik — última parcela',                                                     priority: 'Q1', category: 'pessoal',  timeframe: 'semanal', completed: false },
+  { title: 'Fechar documentos para Beconnected',                                         priority: 'Q1', category: 'pessoal',  timeframe: 'semanal', completed: false },
+  { title: 'Terminar aplicação do Beconnected',                                          priority: 'Q1', category: 'pessoal',  timeframe: 'semanal', completed: false },
+  { title: 'Encontro com os formadores DIC',                                             priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
+  { title: 'Socialização da app de leitura dos parâmetros das máquinas',                 priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
+  { title: 'Apresentar avanços da avaliação de desempenho',                              priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
+  { title: 'Encontro DTI DID — aplicação dos PT\'s',                                     priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
+  { title: 'Solicitação de servidor para Roud Report',                                   priority: 'Q2', category: 'trabalho', timeframe: 'semanal', completed: false },
+  { title: 'Eduardo — vender a máquina',                                                 priority: 'Q2', category: 'pessoal',  timeframe: 'semanal', completed: false },
+  { title: 'Aprovar os candidatos',                                                      priority: 'Q2', category: 'pessoal',  timeframe: 'semanal', completed: false },
+  { title: 'Iniciar treinamento dos vendedores',                                         priority: 'Q2', category: 'pessoal',  timeframe: 'semanal', completed: false },
+  { title: 'Pesquisar preços de tablets — POS Beconnected',                              priority: 'Q2', category: 'pessoal',  timeframe: 'semanal', completed: false },
+  { title: 'Encontro com os CIEUM',                                                      priority: 'Q3', category: 'trabalho', timeframe: 'semanal', completed: false },
+  { title: 'Encontro DTI — ponto focal para iniciativas digitais',                       priority: 'Q3', category: 'trabalho', timeframe: 'semanal', completed: false },
+  { title: 'Memorando DGRH — ponto de situação da consultoria',                          priority: 'Q3', category: 'trabalho', timeframe: 'semanal', completed: false },
+  { title: 'Lançamento do Webinar — Senhora Directora',                                  priority: 'Q3', category: 'trabalho', timeframe: 'semanal', completed: false },
+  { title: 'Gatilhos psicológicos para engajamento no repositório',                      priority: 'Q3', category: 'trabalho', timeframe: 'semanal', completed: false },
+  { title: 'Escolher motorizada',                                                        priority: 'Q4', category: 'pessoal',  timeframe: 'semanal', completed: false },
 ];
 
-// ── Setup screen ──────────────────────────────────────────────────
+// ── Setup screen ─────────────────────────────────────────────────────
 function SetupScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50 flex items-center justify-center p-6">
       <div className="max-w-md bg-white border border-slate-200 rounded-2xl shadow-lg p-6">
-        <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center mb-4">
-          <span className="text-2xl">⚙️</span>
-        </div>
-        <h2 className="text-slate-800 font-bold text-lg mb-2">Configurar Google OAuth</h2>
-        <p className="text-slate-600 text-sm mb-4 leading-relaxed">
-          Crie um ficheiro <code className="bg-slate-100 px-1 rounded text-xs">.env.local</code> na raiz do projecto com:
-        </p>
-        <pre className="bg-slate-900 text-green-400 text-xs rounded-xl p-4 mb-4 overflow-x-auto">{`VITE_GOOGLE_CLIENT_ID=seu-client-id.apps.googleusercontent.com`}</pre>
-        <p className="text-slate-500 text-xs leading-relaxed">
-          Obtenha o Client ID no <strong>Google Cloud Console</strong> → APIs &amp; Services → Credentials.
-        </p>
+        <span className="text-2xl">⚙️</span>
+        <h2 className="text-slate-800 font-bold text-lg mt-3 mb-2">Configurar Google OAuth</h2>
+        <pre className="bg-slate-900 text-green-400 text-xs rounded-xl p-4 mb-3 overflow-x-auto">{`VITE_GOOGLE_CLIENT_ID=...`}</pre>
+        <p className="text-slate-500 text-xs">Google Cloud Console → Credentials → OAuth 2.0 Client IDs.</p>
       </div>
     </div>
   );
 }
 
-// ── Main App ──────────────────────────────────────────────────────
+// ── Main App ─────────────────────────────────────────────────────────
 export default function App() {
   const { isAuthenticated, user } = useGoogleAuth();
+  const userId = user?.sub ?? 'guest';
+  const firebaseOk = isFirebaseConfigured();
 
-  const [tasks,           setTasks]           = useState<Task[]>([]);
+  // Toast notifications queue
+  const [notifs, setNotifs] = useState<NotifItem[]>([]);
+  const pushNotif = useCallback((n: Omit<NotifItem, 'id'>) => {
+    setNotifs((prev) => [...prev, { ...n, id: uuidv4() }]);
+  }, []);
+  const dismissNotif = useCallback((id: string) => {
+    setNotifs((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
+  const { play, prewarm } = useAudioEngine();
+
+  // Play sound + push visual notif
+  const triggerAlert = useCallback((
+    level: NotifItem['level'],
+    title: string,
+    body: string,
+  ) => {
+    play(level);
+    pushNotif({ level, title, body });
+    // Also send browser notification if granted
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '/icon.svg', tag: title.slice(0, 32) });
+    }
+    if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
+  }, [play, pushNotif]);
+
+  // Tasks hook (Firestore or localStorage)
+  const {
+    tasks, addTask: addTaskRaw, updateTask, deleteTask, toggleComplete: toggleCompleteRaw, seedTasks, syncing,
+  } = useTasks(userId, isAuthenticated, (task) => {
+    triggerAlert('success', `✅ Concluída!`, task.title);
+  });
+
   const [timeframe,       setTimeframe]       = useState<Timeframe>('semanal');
   const [isModalOpen,     setIsModalOpen]     = useState(false);
   const [editingTask,     setEditingTask]     = useState<Task | null>(null);
@@ -81,96 +108,119 @@ export default function App() {
     () => 'Notification' in window && Notification.permission === 'granted'
   );
 
-  const { requestPermission, registerSW, checkAndRemind, checkDeadlines } = useNotifications();
-  const userId = user?.sub ?? 'guest';
+  const { requestPermission, registerSW } = useNotifications();
 
-  // Load tasks — isolated per user; seed José's tasks on first login
+  // Seed José's tasks on first login
+  const seededRef = useRef(false);
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    if (!isAuthenticated || !user || seededRef.current) return;
+    if (user.email !== 'josedaninhaacuambe@gmail.com') return;
+    if (tasks.length > 0) return;
+    const already = localStorage.getItem(joseSeedKey(userId));
+    if (already) return;
+    seededRef.current = true;
+    seedTasks(JOSE_TASKS).then(() => {
+      localStorage.setItem(joseSeedKey(userId), JOSE_SEED_VERSION);
+    });
+  }, [isAuthenticated, user, tasks.length, userId, seedTasks]);
 
-    const saved = loadTasks(userId);
+  // Register service worker
+  useEffect(() => { if (isAuthenticated) registerSW(); }, [isAuthenticated, registerSW]);
 
-    if (saved.length === 0 && user.email === 'josedaninhaacuambe@gmail.com') {
-      const alreadySeeded = localStorage.getItem(joseSeedKey(userId));
-      if (!alreadySeeded) {
-        const seeded = JOSE_TASKS.map((t) => ({
-          ...t,
-          id:        uuidv4(),
-          createdAt: new Date().toISOString(),
-        }));
-        setTasks(seeded);
-        localStorage.setItem(joseSeedKey(userId), JOSE_SEED_VERSION);
-        registerSW();
-        return;
-      }
-    }
-
-    // Migrate old tasks that may lack the timeframe field
-    const migrated = saved.map((t) => ({
-      ...t,
-      timeframe: (t as Task & { timeframe?: Timeframe }).timeframe ?? ('semanal' as Timeframe),
-    }));
-    setTasks(migrated);
-    registerSW();
-  }, [isAuthenticated, user, userId, registerSW]);
-
-  // Persist whenever tasks change
-  useEffect(() => {
-    if (isAuthenticated && tasks.length > 0) saveTasks(userId, tasks);
-  }, [tasks, userId, isAuthenticated]);
-
-  // 15-min periodic reminder + deadline alerts every minute
+  // ── Smart deadline checker ────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated) return;
-    checkAndRemind(tasks);
-    checkDeadlines(tasks, userId);
-    const iv = setInterval(() => {
-      checkAndRemind(tasks);
-      checkDeadlines(tasks, userId);
-    }, 60_000);
+    const INTERVAL = 15 * 60 * 1000;
+
+    const check = () => {
+      const now  = new Date();
+      const sent = getSentAlerts(userId);
+
+      tasks.filter((t) => !t.completed && t.dueDate).forEach((t) => {
+        const due  = parseISO(t.dueDate!);
+        const mins = differenceInMinutes(due, now);
+
+        const checks: Array<[string, number | null, NotifItem['level'], string]> = [
+          ['24h',    1440, 'reminder',   '🔔 Prazo amanhã'],
+          ['2h',     120,  'important',  '⚠️ Prazo em 2 horas'],
+          ['30min',  30,   'deadline30', '⚠️ Prazo em 30 minutos'],
+          ['5min',   5,    'deadline5',  '🚨 Prazo em 5 minutos!'],
+          ['overdue',null, 'overdue',    '💀 Prazo ultrapassado!'],
+        ];
+
+        checks.forEach(([key, threshold, level, label]) => {
+          const alertKey = `${t.id}_${key}`;
+          if (sent.has(alertKey)) return;
+          const fire = threshold === null
+            ? mins < 0
+            : mins <= threshold && mins >= threshold - 16;
+          if (!fire) return;
+          triggerAlert(level, label, t.title);
+          addSentAlert(userId, alertKey);
+          sent.add(alertKey);
+        });
+      });
+
+      // 15-min periodic reminder
+      if (Date.now() - getLastNotificationTime() >= INTERVAL) {
+        const urgent = tasks.filter((t) => !t.completed && t.priority === 'Q1');
+        if (urgent.length > 0) {
+          triggerAlert('urgent', `🔴 ${urgent.length} tarefa${urgent.length > 1 ? 's' : ''} urgente${urgent.length > 1 ? 's' : ''}`,
+            urgent.slice(0, 2).map((t) => t.title).join(' • '));
+          setLastNotificationTime();
+        }
+      }
+    };
+
+    check();
+    const iv = setInterval(check, 60_000);
     return () => clearInterval(iv);
-  }, [tasks, checkAndRemind, checkDeadlines, isAuthenticated, userId]);
+  }, [tasks, userId, isAuthenticated, triggerAlert]);
 
   const handleRequestNotif = useCallback(async () => {
+    prewarm(); // pre-warm AudioContext on user gesture
     const ok = await requestPermission();
     setNotifGranted(ok);
-    if (ok) checkAndRemind(tasks);
-  }, [requestPermission, checkAndRemind, tasks]);
+    if (ok) triggerAlert('reminder', '🔔 Notificações activadas!', 'Receberá alertas quando os prazos se aproximarem.');
+  }, [requestPermission, triggerAlert, prewarm]);
 
-  const addTask = useCallback((data: Omit<Task, 'id' | 'createdAt' | 'completed'>) => {
-    setTasks((p) => [{ ...data, id: uuidv4(), createdAt: new Date().toISOString(), completed: false }, ...p]);
+  // ── Task actions ──────────────────────────────────────────────
+  const addTask = useCallback(async (data: Omit<Task, 'id' | 'createdAt' | 'completed'>) => {
+    await addTaskRaw(data);
     setIsModalOpen(false);
     setEditingTask(null);
-  }, []);
+    play('reminder');
+  }, [addTaskRaw, play]);
 
-  const updateTask = useCallback((data: Omit<Task, 'id' | 'createdAt' | 'completed'>) => {
+  const handleUpdateTask = useCallback(async (data: Omit<Task, 'id' | 'createdAt' | 'completed'>) => {
     if (!editingTask) return;
-    setTasks((p) => p.map((t) => (t.id === editingTask.id ? { ...t, ...data } : t)));
+    await updateTask(editingTask.id, data);
     setIsModalOpen(false);
     setEditingTask(null);
-  }, [editingTask]);
+  }, [editingTask, updateTask]);
 
-  const deleteTask     = useCallback((id: string) => setTasks((p) => p.filter((t) => t.id !== id)), []);
-  const toggleComplete = useCallback((id: string) => {
-    setTasks((p) => p.map((t) =>
-      t.id === id
-        ? { ...t, completed: !t.completed, completedAt: !t.completed ? new Date().toISOString() : undefined }
-        : t
-    ));
-  }, []);
+  const handleDeleteTask = useCallback((id: string) => deleteTask(id), [deleteTask]);
+
+  const handleToggle = useCallback(async (id: string) => {
+    prewarm();
+    await toggleCompleteRaw(id);
+  }, [toggleCompleteRaw, prewarm]);
 
   const openAdd  = (priority: Priority = 'Q1') => { setEditingTask(null); setDefaultPriority(priority); setIsModalOpen(true); };
   const openEdit = (task: Task) => { setEditingTask(task); setDefaultPriority(task.priority); setIsModalOpen(true); };
 
   // ── Guards ────────────────────────────────────────────────────
   if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) return <SetupScreen />;
-  if (!isAuthenticated)                        return <LoginPage />;
+  if (!isAuthenticated) return <LoginPage />;
 
   const visibleTasks = tasks.filter((t) => t.timeframe === timeframe);
   const pendingQ1    = visibleTasks.filter((t) => t.priority === 'Q1' && !t.completed).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/40">
+      {/* Visual notifications */}
+      <NotificationOverlay notifications={notifs} onDismiss={dismissNotif} />
+
       <Header
         tasks={visibleTasks}
         timeframe={timeframe}
@@ -181,7 +231,17 @@ export default function App() {
       />
 
       <main className="container mx-auto px-4 pt-5">
-        {/* Urgent CTA banner */}
+        {/* Sync indicator */}
+        {firebaseOk && (
+          <motion.div
+            animate={{ opacity: syncing ? 1 : 0 }}
+            className="mb-3 flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2.5 text-indigo-600 text-xs font-semibold">
+            <Cloud className="w-4 h-4 animate-pulse" />
+            A sincronizar com todos os dispositivos…
+          </motion.div>
+        )}
+
+        {/* Urgent CTA */}
         <AnimatePresence>
           {pendingQ1 > 0 && (
             <motion.div key="urgent-banner"
@@ -192,9 +252,10 @@ export default function App() {
                 <h3 className="text-white font-black text-base">
                   {pendingQ1} tarefa{pendingQ1 > 1 ? 's' : ''} urgente{pendingQ1 > 1 ? 's' : ''}!
                 </h3>
-                <p className="text-white/75 text-sm mt-0.5">Estas tarefas exigem atenção imediata. Comece por elas agora.</p>
+                <p className="text-white/75 text-sm mt-0.5">Estas tarefas exigem atenção imediata.</p>
               </div>
-              <button onClick={() => openAdd('Q1')} className="bg-white/20 hover:bg-white/30 text-white font-bold text-sm px-4 py-2 rounded-xl transition-all flex-shrink-0">
+              <button onClick={() => { prewarm(); openAdd('Q1'); }}
+                className="bg-white/20 hover:bg-white/30 text-white font-bold text-sm px-4 py-2 rounded-xl transition-all flex-shrink-0">
                 + Urgente
               </button>
             </motion.div>
@@ -221,9 +282,9 @@ export default function App() {
 
         <QuadrantBoard
           tasks={visibleTasks}
-          onToggleComplete={toggleComplete}
+          onToggleComplete={handleToggle}
           onEdit={openEdit}
-          onDelete={deleteTask}
+          onDelete={handleDeleteTask}
           onAddTask={openAdd}
         />
 
@@ -251,7 +312,7 @@ export default function App() {
             task={editingTask}
             defaultPriority={defaultPriority}
             defaultTimeframe={timeframe}
-            onSave={editingTask ? updateTask : addTask}
+            onSave={editingTask ? handleUpdateTask : addTask}
             onClose={() => { setIsModalOpen(false); setEditingTask(null); }}
           />
         )}
